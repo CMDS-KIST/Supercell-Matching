@@ -1,0 +1,19 @@
+dpi = 300 ## dpi (variable)
+width = 165 ## mm (variable)
+height = 165 ## mm (variable)
+
+in2mm = 25.4 # mm (fixed)
+pt2mm = 0.3528 # mm (fixed)
+
+mm2px = dpi/in2mm
+ptscale = pt2mm*mm2px
+round(x) = x - floor(x) < 0.5 ? floor(x) : ceil(x)
+wpx = round(width * mm2px)
+hpx = round(height * mm2px)
+
+set terminal pngcairo size wpx,hpx fontscale ptscale linewidth ptscale pointscale ptscale
+set output 'timeplot_notablegen.png'
+set xlabel 'Maximum index'
+set ylabel 'Time cost (second)'
+set key right top
+plot 'time_table_notablegen.txt' u 1:2 lc rgb 'blue' pt 5 t 'Our method', 'time_table.txt' u 1:3 lc rgb 'red' pt 7 t 'Conventional method'
