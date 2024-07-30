@@ -1,5 +1,5 @@
-from eisenstein import EisensteinInt
-from gaussint import GaussInt
+from eisenstein.eisenstein import EisensteinInt
+from NumberTheoryPython.gaussint import GaussInt
 import cmath
 
 class EisensteinInt_hex(EisensteinInt):
