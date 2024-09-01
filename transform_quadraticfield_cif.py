@@ -15,7 +15,10 @@ def get_transformed_quadfield_surface_for_heterostructure(initial_structure, tra
     if transform_operator.shape == (2,):
         m1 = transform_operator[0]
         m2 = transform_operator[1]
-        transformed_structure.make_supercell([[m1, m2, 0], [dsquare*m2, m1 - m2, 0], [0, 0, 1]])
+        if dsquare % 4 != 1:
+            transformed_structure.make_supercell([[m1, m2, 0], [dsquare*m2, m1, 0], [0, 0, 1]])
+        else:
+            transformed_structure.make_supercell([[m1, m2, 0], [(dsquare - 1)//4*m2, m1 - m2, 0], [0, 0, 1]])
     elif transform_operator.shape == (2, 2):
         transform_matrix = np.eye(3)
         transform_matrix[:2, :2] = transform_operator
@@ -42,15 +45,15 @@ def export_transformed_quadfield_surface_for_heterostructure(initial_structure_f
     if transform_operator.shape == (2,):
         m1 = transform_operator[0]
         m2 = transform_operator[1]
-        transformed_filename = os.path.join(default_workdir, f'{initial_filename_without_ext}_{m1}I_{m2}sqrt{dsquare}.cif')
-        transformed_filename2 = os.path.join(default_workdir, f'{initial_filename_without_ext}_{m1}I_{m2}sqrt{dsquare}_novacuum.cif')
+        transformed_filename = os.path.join(workdir, f'{initial_filename_without_ext}_{m1}I_{m2}W.cif')
+        transformed_filename2 = os.path.join(workdir, f'{initial_filename_without_ext}_{m1}I_{m2}W_novacuum.cif')
     elif transform_operator.shape == (2, 2):
         m11 = transform_operator[0][0]
         m12 = transform_operator[0][1]
         m21 = transform_operator[1][0]
         m22 = transform_operator[1][1]
-        transformed_filename = os.path.join(default_workdir, f'{initial_filename_without_ext}_{m11}_{m12}_{m21}_{m22}.cif')
-        transformed_filename2 = os.path.join(default_workdir, f'{initial_filename_without_ext}_{m11}_{m12}_{m21}_{m22}_novacuum.cif')
+        transformed_filename = os.path.join(workdir, f'{initial_filename_without_ext}_{m11}_{m12}_{m21}_{m22}.cif')
+        transformed_filename2 = os.path.join(workdir, f'{initial_filename_without_ext}_{m11}_{m12}_{m21}_{m22}_novacuum.cif')
     transformed_vacuum_added_cif_writer = CifWriter(transformed_structure)
     transformed_vacuum_added_cif_writer.write_file(transformed_filename)
     transformed_cif_writer = CifWriter(transformed_structure2)
@@ -88,8 +91,8 @@ def export_heterostructure(top_structure_filename, transform_operator1, bottom_s
         m2 = transform_operator1[1]
         n1 = transform_operator2[0]
         n2 = transform_operator2[1]
-        heterostructure_filename = os.path.join(workdir, f'{top_filename_without_ext}_{m1}I+{m2}sqrt{dsquare}_{bottom_filename_without_ext}_{n1}I+{n2}sqrt{dsquare}.cif')
-        heterostructure_reduced_filename = os.path.join(workdir, f'{top_filename_without_ext}_{m1}I+{m2}sqrt{dsquare}_{bottom_filename_without_ext}_{n1}I+{n2}sqrt{dsquare}_reduced.cif')
+        heterostructure_filename = os.path.join(workdir, f'{top_filename_without_ext}_{m1}I+{m2}W_{bottom_filename_without_ext}_{n1}I+{n2}W.cif')
+        heterostructure_reduced_filename = os.path.join(workdir, f'{top_filename_without_ext}_{m1}I+{m2}W_{bottom_filename_without_ext}_{n1}I+{n2}W_reduced.cif')
     else:
         heterostructure_filename = os.path.join(workdir, f'{top_filename_without_ext}_T1_{bottom_filename_without_ext}_T2.cif')
         heterostructure_reduced_filename = os.path.join(workdir, f'{top_filename_without_ext}_T1_{bottom_filename_without_ext}_T2_reduced.cif')

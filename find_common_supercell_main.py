@@ -8,6 +8,7 @@ import transform_hexagonal_cif
 import transform_quadraticfield_cif
 import bisect
 import pickle
+from quadraticinteger import DedekindDomainInt
 
 from pymatgen.io.cif import CifParser, CifWriter
 from pymatgen.core.lattice import Lattice
@@ -19,35 +20,26 @@ float_equal_tol = 1e-4
 def determinant_lattice_shape(l: Lattice):
     return l.b/l.a*(math.cos(l.gamma/180*math.pi) + 1j*math.sin(l.gamma/180*math.pi))
 
-def find_ratio(target_value, ratio_table, d:int, tol=1e-2, target_angles=[]):
-    if d > 0:
+def find_ratio(target_value, ratio_table, quad_d:int, tol=1e-2, target_angles=[], tol_angle = 0.01):
+    if quad_d > 0:
         print('This quadratic integer is real - it is not 2D lattice!')
         exit(1)
 
-    def make_omega_matrix(m11:int, m12:int, d:int):
-        if d % 4 != 1:
-            m11i_plus_m12omega = np.array([[m11, m12], [d*m12, m11]])
+    def make_omega_matrix(m11:int, m12:int, quad_d:int):
+        if quad_d % 4 != 1:
+            m11i_plus_m12omega = np.array([[m11, m12], [quad_d*m12, m11]])
         else:
-            m11i_plus_m12omega = np.array([[m11, m12], [-d*m12, m11-m12]])
+            m11i_plus_m12omega = np.array([[m11, m12], [(quad_d - 1)//4*m12, m11 - m12]])
         return m11i_plus_m12omega
 
     def make_return_dict(i):
-        m = ratio_table[i][0][0] + ratio_table[i][0][1]*omega
-        n = ratio_table[i][0][2] + ratio_table[i][0][3]*omega
-        angle = cmath.phase(m/n)/math.pi*180
-
-        return_dict = {'Transform_a': make_omega_matrix(ratio_table[i][0][0], ratio_table[i][0][1], d),
-            'Transform_b': make_omega_matrix(ratio_table[i][0][2], ratio_table[i][0][3], d),
+        return_dict = {'Transform_a': make_omega_matrix(ratio_table[i][0][0], ratio_table[i][0][1], quad_d),
+            'Transform_b': make_omega_matrix(ratio_table[i][0][2], ratio_table[i][0][3], quad_d),
             'Quad_int_a': [ratio_table[i][0][0], ratio_table[i][0][1]],
             'Quad_int_b': [ratio_table[i][0][2], ratio_table[i][0][3]],
             'angle': ratio_table[i][1][1],
             'table_ratio': ratio_table[i][1][0]}
         return return_dict
-
-    if d % 4 != 1:
-        omega = cmath.sqrt(d)
-    else:
-        omega = (-1 + cmath.sqrt(d))/2.0
 
     sorted_ratio_value = [value[1][0] for value in ratio_table]
     target_lower_bound = target_value*(1.0 - tol)
@@ -59,131 +51,41 @@ def find_ratio(target_value, ratio_table, d:int, tol=1e-2, target_angles=[]):
     if not target_angles:
         return_dict_list = r_filtered_dict_list
     else:
-        angle_tol = tol
+        angle_tol = tol_angle
         angle_filtered_dict_list = [d for d in r_filtered_dict_list if any(abs(d['angle'] - target_angle) < angle_tol for target_angle in target_angles)]
+        if quad_d == -1:
+            angle_filtered_dict_list += [d for d in r_filtered_dict_list if any(abs(d['angle'] - (90 - target_angle)) < angle_tol for target_angle in target_angles)]
+        elif quad_d == -3:
+            angle_filtered_dict_list += [d for d in r_filtered_dict_list if any(abs(d['angle'] - (60 - target_angle)) < angle_tol for target_angle in target_angles)]
         return_dict_list = angle_filtered_dict_list
     
     return return_dict_list
 
-def find_ratio_by_quad_pair(target_value, ratio_table, d:int, tol=1e-2, target_angles = []):
-    if d > 0:
+def find_ratio_by_quad_pair(target_value, ratio_table, quad_d:int, tol=1e-2, target_angles = [], tol_angle=0.01):
+    if quad_d > 0:
         print('Quadratic integer is real - it is not 2D lattice!')
         exit(1)
 
-    if d % 4 != 1:
-        omega = cmath.sqrt(d)
-    elif d % 4 == 1:
-        omega = (-1 + cmath.sqrt(d))/2.0
-
     sorted_ratio_value = [value[1][0] for value in ratio_table]
-    n_left = bisect.bisect_left(sorted_ratio_value, target_value)
+    target_lower_bound = target_value*(1.0 - tol)
+    target_upper_bound = target_value*(1.0 + tol)
+    n_left = bisect.bisect_left(sorted_ratio_value, target_lower_bound)
+    n_right = bisect.bisect_right(sorted_ratio_value, target_upper_bound)
 
-    i = n_left
-    return_dict_list = []
-    if d != -3 and d != -1:
-        return_dict_list.append([ratio_table[i][0][0] + ratio_table[i][0][1]*omega, ratio_table[i][0][2] + ratio_table[i][0][3]*omega, 0])
-    elif d == -3:
-        return_dict_list.append([EisensteinInt_hex(ratio_table[i][0][0], ratio_table[i][0][1]), EisensteinInt_hex(ratio_table[i][0][2], ratio_table[i][0][3]), 0])
-    elif d == -1:
-        return_dict_list.append([GaussInt_square(ratio_table[i][0][0], ratio_table[i][0][1]), GaussInt_square(ratio_table[i][0][2], ratio_table[i][0][3]), 0])
-
-    i = i + 1
-    i_neg = i - 1
-    previous_index = 0
-    candadite_list = []
-    for j in range(len(target_angles)):
-        candadite_list.append([])
-    while (abs(sorted_ratio_value[n_left] - sorted_ratio_value[i]) < tol*target_value):
-        if d != -3 and d != -1:
-            layer1_quadint = ratio_table[i][0][0] + ratio_table[i][0][1]*omega
-            layer2_quadint = ratio_table[i][0][2] + ratio_table[i][0][3]*omega
-            layer1_angle = cmath.phase(layer1_quadint)
-            layer2_angle = cmath.phase(layer2_quadint)
-        elif d == -3:
-            layer1_quadint = EisensteinInt_hex(ratio_table[i][0][0], ratio_table[i][0][1])
-            layer2_quadint = EisensteinInt_hex(ratio_table[i][0][2], ratio_table[i][0][3])
-            layer1_angle = layer1_quadint.arg()
-            layer2_angle = layer2_quadint.arg()
-        elif d == -1:
-            layer1_quadint = GaussInt_square(ratio_table[i][0][0], ratio_table[i][0][1])
-            layer2_quadint = GaussInt_square(ratio_table[i][0][2], ratio_table[i][0][3])
-            layer1_angle = layer1_quadint.arg()
-            layer2_angle = layer2_quadint.arg()
-
-        rotation_angle = (layer1_angle - layer2_angle)/math.pi*180
-        strain = (sorted_ratio_value[i] - target_value)/target_value
-        solution = [layer1_quadint, layer2_quadint, strain]
-        #print(rotation_angle)
-        if not target_angles:
-            return_dict_list.append(solution)
-        else:
-            index_for_target_angle = np.where(np.isclose(abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
-            if d == -3:
-                index_for_target_angle_60 = np.where(np.isclose(60 - abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
-                index_for_target_angle = np.concatenate((index_for_target_angle, index_for_target_angle_60), axis=0)
-            elif d == -1:
-                index_for_target_angle_90 = np.where(np.isclose(90 - abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
-                index_for_target_angle = np.concatenate((index_for_target_angle, index_for_target_angle_90), axis=0)
-            if index_for_target_angle.size != 0:
-                found_index = index_for_target_angle[0]
-                candadite_list[found_index].append(solution)
-        i = i + 1
-
-    while (abs(sorted_ratio_value[n_left] - sorted_ratio_value[i_neg]) < tol*target_value):
-        if d != -3 and d != -1:
-            layer1_quadint = ratio_table[i_neg][0][0] + ratio_table[i_neg][0][1]*omega
-            layer2_quadint = ratio_table[i_neg][0][2] + ratio_table[i_neg][0][3]*omega
-            layer1_angle = cmath.phase(layer1_quadint)
-            layer2_angle = cmath.phase(layer2_quadint)
-        elif d == -3:
-            layer1_quadint = EisensteinInt_hex(ratio_table[i_neg][0][0], ratio_table[i_neg][0][1])
-            layer2_quadint = EisensteinInt_hex(ratio_table[i][0][2], ratio_table[i_neg][0][3])
-            layer1_angle = layer1_quadint.arg()
-            layer2_angle = layer2_quadint.arg()
-        elif d == -1:
-            layer1_quadint = GaussInt_square(ratio_table[i_neg][0][0], ratio_table[i_neg][0][1])
-            layer2_quadint = GaussInt_square(ratio_table[i_neg][0][2], ratio_table[i_neg][0][3])
-            layer1_angle = layer1_quadint.arg()
-            layer2_angle = layer2_quadint.arg()
-
-        rotation_angle = (layer1_angle - layer2_angle)/math.pi*180
-        strain = (sorted_ratio_value[i_neg] - target_value)/target_value
-        solution = [layer1_quadint, layer2_quadint, strain]
-        #print(rotation_angle)
-        if not target_angles:
-            return_dict_list.append(solution)
-        else:
-            index_for_target_angle = np.where(np.isclose(abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
-            if index_for_target_angle.size != 0:
-                found_index = index_for_target_angle[0]
-                candadite_list[found_index].append(solution)
-            if d == -3:
-                index_for_target_angle_60 = np.where(np.isclose(60 - abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
-                index_for_target_angle = np.concatenate((index_for_target_angle, index_for_target_angle_60), axis=0)
-            elif d == -1:
-                index_for_target_angle_90 = np.where(np.isclose(90 - abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
-                index_for_target_angle = np.concatenate((index_for_target_angle, index_for_target_angle_90), axis=0)
-            if index_for_target_angle.size != 0:
-                found_index = index_for_target_angle[0]
-                candadite_list[found_index].append(solution)
-            
-        i_neg = i_neg - 1
-    
-    if candadite_list:
-        for candadites in candadite_list:
-            if candadites:
-                if d != -3 and d != -1:
-                    min_index = min(enumerate(map(lambda item:abs(item[0]) + abs(item[1]), candadites)), key=lambda x:x[1])[0]
-                else:
-                    min_index = min(enumerate(map(lambda item:item[0].norm() + item[1].norm(), candadites)), key=lambda x:x[1])[0]
-                return_dict_list.append(candadites[min_index])
-
-    if d == -3 or d == -1:
-        #return_dict_list.sort(key=lambda x: abs(cmath.phase(x[0].complex_form()) - cmath.phase(x[1].complex_form())))
-        return_dict_list.sort(key=lambda x: abs(x[0].arg() - x[1].arg()))
+    r_filtered_quad_pair = [[DedekindDomainInt(ratio_table[i][0][0], ratio_table[i][0][1], quad_d), DedekindDomainInt(ratio_table[i][0][2], ratio_table[i][0][3], quad_d), ratio_table[i][1][1], (ratio_table[i][1][0] - target_value)/target_value] for i in range(n_left, n_right)]
+    if not target_angles:
+        return_quad_pair = r_filtered_quad_pair
     else:
-        return_dict_list.sort(key=lambda x: abs(cmath.phase(x[0]) - cmath.phase(x[1])))
-    return return_dict_list
+        angle_tol = tol_angle
+        angle_filtered_quad_pair = [pair for pair in r_filtered_quad_pair if any(abs(pair[2] - target_angle) < angle_tol for target_angle in target_angles)]
+        return_quad_pair = angle_filtered_quad_pair
+        if quad_d == -1:
+            angle_filtered_quad_pair += [pair for pair in r_filtered_quad_pair if any(abs(pair[2] - (90 - target_angle)) < angle_tol for target_angle in target_angles)]
+        elif quad_d == -3:
+            angle_filtered_quad_pair += [pair for pair in r_filtered_quad_pair if any(abs(pair[2] - (60 - target_angle)) < angle_tol for target_angle in target_angles)]
+
+        return_quad_pair.sort(key=lambda x: x[2])
+    return return_quad_pair
 
 def print_common_supercell_transform_dict(transform_dict, test_r):
     transform_dict_str = f'[{transform_dict["Transform_a"][0][0]: 03d} {transform_dict["Transform_a"][0][1]: 03d}]l_a = exp(i*{transform_dict["angle"]:0.02f}/180*pi)[{transform_dict["Transform_b"][0][0]: 03d} {transform_dict["Transform_b"][0][1]: 03d}]({transform_dict["table_ratio"]/test_r})l_b ({transform_dict["table_ratio"]:.4f})\n[{transform_dict["Transform_a"][1][0]: 03d} {transform_dict["Transform_a"][1][1]: 03d}]                          [{transform_dict["Transform_b"][0][0]: 03d} {transform_dict["Transform_b"][1][1]: 03d}]'
@@ -197,6 +99,7 @@ def main():
     parser.add_argument('--output_type', type=str, default='cif', help='Type of output (cif, latex)')
     parser.add_argument('--target_angles_file', type=str, default='', help='File name describing rotation angles of the heterostructures to finding.')
     parser.add_argument('--max_index', type=int, default=60, help='Maximum limit of the coefficients of the quadratic integers')
+    parser.add_argument('--tol_angle', type=float, default=0.01, help='Tolerance to angle (default is 0.01)')
     
     args = parser.parse_args()
     if not os.path.isfile(args.Top_cif_filename):
@@ -257,27 +160,24 @@ def main():
             exit(1)
 
     if args.output_type == 'cif':
-        roots = find_ratio(target_ratio, ratio_table, quad_d, args.tol_strain, target_angle_list)
+        roots = find_ratio(target_ratio, ratio_table, quad_d, args.tol_strain, target_angle_list, args.tol_angle)
         for root in roots:
-            #if quad_d == -3:
-            #    heterostructure, filename = transform_hexagonal_cif.export_heterostructure(Top_cif_filename, root['Quad_int_a'][0], root['Quad_int_a'][1], Bottom_cif_filename, root['Quad_int_b'][0], root['Quad_int_b'][1], work_dir = work_dir)
-            #else:
             heterostructure, filename = transform_quadraticfield_cif.export_heterostructure(Top_cif_filename, np.array(root['Quad_int_a']), Bottom_cif_filename, np.array(root['Quad_int_b']), quad_d, workdir = work_dir)
 
-            sa_prec1 = SpacegroupAnalyzer(heterostructure, symprec=0.1, angle_tolerance=10)
-            heterostructure_prim = sa_prec1.find_primitive()
+            #sa_prec1 = SpacegroupAnalyzer(heterostructure, symprec=0.1, angle_tolerance=10)
+            #heterostructure_prim = sa_prec1.find_primitive()
 
-            base_filename = os.path.basename(filename)
-            base_splited_filename = os.path.splitext(base_filename)[0]
-            output_filename = f'{base_splited_filename}_prim.cif'
-            CifWriter(heterostructure_prim).write_file(output_filename)
+            #base_filename = os.path.basename(filename)
+            #base_splited_filename = os.path.splitext(base_filename)[0]
+            #output_filename = f'{base_splited_filename}_prim.cif'
+            #CifWriter(heterostructure_prim).write_file(output_filename)
 
             print_common_supercell_transform_dict(root, target_ratio)
     elif args.output_type == 'latex':
         import print_supercell_text
-        roots = find_ratio_by_quad_pair(target_ratio, ratio_table, quad_d, args.tol_strain, target_angle_list)
+        roots = find_ratio_by_quad_pair(target_ratio, ratio_table, quad_d, args.tol_strain, target_angle_list, args.tol_angle)
         for root in roots:
-            print(print_supercell_text.common_supercell_wood_notations(root[0:2], root[2], quad_d))
+            print(print_supercell_text.common_supercell_wood_notations(root[0:3], root[3], quad_d))
 
 if __name__ == '__main__':
     import time
