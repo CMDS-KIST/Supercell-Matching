@@ -15,13 +15,11 @@ def get_transformed_quadfield_surface_for_heterostructure(initial_structure, tra
     if transform_operator.shape == (2,):
         m1 = transform_operator[0]
         m2 = transform_operator[1]
-        transformed_structure.make_supercell([[m1, m2, 0], [dsquare*m2, m1, 0], [0, 0, 1]])
+        transformed_structure.make_supercell([[m1, m2, 0], [dsquare*m2, m1 - m2, 0], [0, 0, 1]])
     elif transform_operator.shape == (2, 2):
-        m11 = transform_operator[0][0]
-        m12 = transform_operator[0][1]
-        m21 = transform_operator[1][0]
-        m22 = transform_operator[1][1]
-        transformed_structure.make_supercell([[m11, m12, 0], [m21, m22, 0], [0, 0, 1]])
+        transform_matrix = np.eye(3)
+        transform_matrix[:2, :2] = transform_operator
+        transformed_structure.make_supercell(transform_matrix)
     
     a, b, c = transformed_structure.lattice.matrix
     transformed_vacuum_lattice = [a, b, c*2]
@@ -43,7 +41,7 @@ def export_transformed_quadfield_surface_for_heterostructure(initial_structure_f
     initial_filename_without_ext = os.path.splitext(initial_basename)[0]
     if transform_operator.shape == (2,):
         m1 = transform_operator[0]
-        m2 = transform_operator[1]        
+        m2 = transform_operator[1]
         transformed_filename = os.path.join(default_workdir, f'{initial_filename_without_ext}_{m1}I_{m2}sqrt{dsquare}.cif')
         transformed_filename2 = os.path.join(default_workdir, f'{initial_filename_without_ext}_{m1}I_{m2}sqrt{dsquare}_novacuum.cif')
     elif transform_operator.shape == (2, 2):

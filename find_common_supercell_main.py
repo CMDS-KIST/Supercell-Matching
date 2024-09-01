@@ -7,6 +7,7 @@ from print_supercell_text import GaussInt_square, EisensteinInt_hex
 import transform_hexagonal_cif
 import transform_quadraticfield_cif
 import bisect
+import pickle
 
 from pymatgen.io.cif import CifParser, CifWriter
 from pymatgen.core.lattice import Lattice
@@ -20,14 +21,14 @@ def determinant_lattice_shape(l: Lattice):
 
 def find_ratio(target_value, ratio_table, d:int, tol=1e-2, target_angles=[]):
     if d > 0:
-        print('Quadratic integer is real - it is not 2D lattice!')
+        print('This quadratic integer is real - it is not 2D lattice!')
         exit(1)
 
-    def make_omega_matrix(m11, m12, d:int):
-        if d != -3:
+    def make_omega_matrix(m11:int, m12:int, d:int):
+        if d % 4 != 1:
             m11i_plus_m12omega = np.array([[m11, m12], [d*m12, m11]])
-        elif d == -3:
-            m11i_plus_m12omega = np.array([[m11, m12], [-m12, m11-m12]])
+        else:
+            m11i_plus_m12omega = np.array([[m11, m12], [-d*m12, m11-m12]])
         return m11i_plus_m12omega
 
     def make_return_dict(i):
@@ -39,28 +40,28 @@ def find_ratio(target_value, ratio_table, d:int, tol=1e-2, target_angles=[]):
             'Transform_b': make_omega_matrix(ratio_table[i][0][2], ratio_table[i][0][3], d),
             'Quad_int_a': [ratio_table[i][0][0], ratio_table[i][0][1]],
             'Quad_int_b': [ratio_table[i][0][2], ratio_table[i][0][3]],
-            'angle': angle,
-            'table_ratio': ratio_table[i][1]}
+            'angle': ratio_table[i][1][1],
+            'table_ratio': ratio_table[i][1][0]}
         return return_dict
 
-    if d != -3:
+    if d % 4 != 1:
         omega = cmath.sqrt(d)
-    elif d == -3:
+    else:
         omega = (-1 + cmath.sqrt(d))/2.0
 
-    sorted_ratio_value = [value[1] for value in ratio_table]
-    n_left = bisect.bisect_left(sorted_ratio_value, target_value)
+    sorted_ratio_value = [value[1][0] for value in ratio_table]
+    target_lower_bound = target_value*(1.0 - tol)
+    target_upper_bound = target_value*(1.0 + tol)
+    n_left = bisect.bisect_left(sorted_ratio_value, target_lower_bound)
+    n_right = bisect.bisect_right(sorted_ratio_value, target_upper_bound)
 
-    i = n_left
-    return_dict_list = []
-    return_dict_list.append(make_return_dict(i))
-    i = i + 1
-    while (abs(sorted_ratio_value[n_left] - sorted_ratio_value[i]) < tol*target_value):
-        if not target_angles:
-            return_dict_list.append(make_return_dict(i))
-        else:
-            pass
-        i = i + 1
+    r_filtered_dict_list = [make_return_dict(i) for i in range(n_left, n_right)]
+    if not target_angles:
+        return_dict_list = r_filtered_dict_list
+    else:
+        angle_tol = tol
+        angle_filtered_dict_list = [d for d in r_filtered_dict_list if any(abs(d['angle'] - target_angle) < angle_tol for target_angle in target_angles)]
+        return_dict_list = angle_filtered_dict_list
     
     return return_dict_list
 
@@ -69,12 +70,12 @@ def find_ratio_by_quad_pair(target_value, ratio_table, d:int, tol=1e-2, target_a
         print('Quadratic integer is real - it is not 2D lattice!')
         exit(1)
 
-    if d != -3:
+    if d % 4 != 1:
         omega = cmath.sqrt(d)
-    elif d == -3:
+    elif d % 4 == 1:
         omega = (-1 + cmath.sqrt(d))/2.0
 
-    sorted_ratio_value = [value[1] for value in ratio_table]
+    sorted_ratio_value = [value[1][0] for value in ratio_table]
     n_left = bisect.bisect_left(sorted_ratio_value, target_value)
 
     i = n_left
@@ -117,6 +118,12 @@ def find_ratio_by_quad_pair(target_value, ratio_table, d:int, tol=1e-2, target_a
             return_dict_list.append(solution)
         else:
             index_for_target_angle = np.where(np.isclose(abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
+            if d == -3:
+                index_for_target_angle_60 = np.where(np.isclose(60 - abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
+                index_for_target_angle = np.concatenate((index_for_target_angle, index_for_target_angle_60), axis=0)
+            elif d == -1:
+                index_for_target_angle_90 = np.where(np.isclose(90 - abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
+                index_for_target_angle = np.concatenate((index_for_target_angle, index_for_target_angle_90), axis=0)
             if index_for_target_angle.size != 0:
                 found_index = index_for_target_angle[0]
                 candadite_list[found_index].append(solution)
@@ -150,6 +157,16 @@ def find_ratio_by_quad_pair(target_value, ratio_table, d:int, tol=1e-2, target_a
             if index_for_target_angle.size != 0:
                 found_index = index_for_target_angle[0]
                 candadite_list[found_index].append(solution)
+            if d == -3:
+                index_for_target_angle_60 = np.where(np.isclose(60 - abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
+                index_for_target_angle = np.concatenate((index_for_target_angle, index_for_target_angle_60), axis=0)
+            elif d == -1:
+                index_for_target_angle_90 = np.where(np.isclose(90 - abs(rotation_angle), target_angles, rtol=0.001, atol=0.01))[0]
+                index_for_target_angle = np.concatenate((index_for_target_angle, index_for_target_angle_90), axis=0)
+            if index_for_target_angle.size != 0:
+                found_index = index_for_target_angle[0]
+                candadite_list[found_index].append(solution)
+            
         i_neg = i_neg - 1
     
     if candadite_list:
@@ -179,6 +196,7 @@ def main():
     parser.add_argument('--tol_strain', type=float, default=0.01, help='Tolerance to strain (default is 0.01)')
     parser.add_argument('--output_type', type=str, default='cif', help='Type of output (cif, latex)')
     parser.add_argument('--target_angles_file', type=str, default='', help='File name describing rotation angles of the heterostructures to finding.')
+    parser.add_argument('--max_index', type=int, default=60, help='Maximum limit of the coefficients of the quadratic integers')
     
     args = parser.parse_args()
     if not os.path.isfile(args.Top_cif_filename):
@@ -200,53 +218,26 @@ def main():
         print('Shapes of top and bottom are different.')
         exit(1)
 
-    if abs(d_top**2 + d_top + 1) < float_equal_tol:
-        import eisenstein_list_pos_arg as eisenstein_list
-        D = -3
-        ratio_table = eisenstein_list.sorted_dict
-    elif d_top.real < 1e-4:
-        D = -1*round(d_top.imag**2)
-        if abs(d_top.imag**2 - 1) < float_equal_tol:
-            import gaussian_list_pos_arg
-            ratio_table = gaussian_list_pos_arg.sorted_dict
-        elif abs(d_top.imag**2 - 2) < float_equal_tol:
-            import Zsqrt2i_list
-            ratio_table = Zsqrt2i_list.sorted_ratio_dict
-        elif abs(d_top.imag**2 - 5) < float_equal_tol:
-            import Zsqrt5i_list 
-            ratio_table = Zsqrt5i_list.sorted_ratio_dict
-        elif abs(d_top.imag**2 - 6) < float_equal_tol:
-            import Zsqrt6i_list
-            ratio_table = Zsqrt6i_list.sorted_ratio_dict
-        elif abs(d_top.imag**2 - 7) < float_equal_tol:
-            import Zsqrt7i_list
-            ratio_table = Zsqrt7i_list.sorted_ratio_dict
-        elif abs(d_top.imag**2 - 10) < float_equal_tol:
-            import Zsqrt10i_list
-            ratio_table = Zsqrt10i_list.sorted_ratio_dict
-        elif abs(d_top.imag**2 - 11) < float_equal_tol:
-            import Zsqrt11i_list
-            ratio_table = Zsqrt11i_list.sorted_ratio_dict
-        elif abs(d_top.imag**2 - 13) < float_equal_tol:
-            import Zsqrt13i_list
-            ratio_table = Zsqrt13i_list.sorted_ratio_dict
-        elif abs(d_top.imag**2 - 14) < float_equal_tol:
-            import Zsqrt14i_list
-            ratio_table = Zsqrt14i_list.sorted_ratio_dict
-        elif abs(d_top.imag**2 - 15) < float_equal_tol:
-            import Zsqrt15i_list
-            ratio_table = Zsqrt15i_list.sorted_ratio_dict
-        else:
-            print('This rectangular lattice is not supported')
-            exit(1)
+    if abs(d_top.real + 0.5) < float_equal_tol:
+        quad_d = -round(4*d_top.imag**2)
+    elif abs(d_top.real) < float_equal_tol:
+        quad_d = -round(d_top.imag**2)
     else:
-        print('This oblique lattice is not supported.')
+        print('This lattice is not supported.')
+        exit(1)
+    
+    filename_pickle = f'OZsqrt{-quad_d}i_list_{args.max_index}.pickle'
+    if os.path.isfile(filename_pickle):
+        with open(filename_pickle, 'rb') as f:
+            ratio_table = pickle.load(f)
+    else:
+        print('There is no table to find common supercells. Please make a table by executing Zquad_maketable.py.')
         exit(1)
     
     target_ratio = Bottom_structure.lattice.a/Top_structure.lattice.a
     Top_cif_filename = args.Top_cif_filename
     Bottom_cif_filename = args.Bottom_cif_filename
-    if target_ratio < 1:
+    if target_ratio < 1: # If the bottom cell is smaller than the top cell, we swap the top and the bottom cells.
         temp_structure = Top_structure.copy()
         Top_structure = Bottom_structure.copy()
         Bottom_structure = temp_structure.copy()
@@ -266,12 +257,12 @@ def main():
             exit(1)
 
     if args.output_type == 'cif':
-        roots = find_ratio(target_ratio, ratio_table, D, args.tol_strain, target_angle_list)
+        roots = find_ratio(target_ratio, ratio_table, quad_d, args.tol_strain, target_angle_list)
         for root in roots:
-            if D == -3:
-                heterostructure, filename = transform_hexagonal_cif.export_heterostructure(Top_cif_filename, root['Quad_int_a'][0], root['Quad_int_a'][1], Bottom_cif_filename, root['Quad_int_b'][0], root['Quad_int_b'][1], workdir = work_dir)
-            else:
-                heterostructure, filename = transform_quadraticfield_cif.export_heterostructure(Top_cif_filename, np.array(root['Quad_int_a']), Bottom_cif_filename, np.array(root['Quad_int_b']), D, workdir = work_dir)
+            #if quad_d == -3:
+            #    heterostructure, filename = transform_hexagonal_cif.export_heterostructure(Top_cif_filename, root['Quad_int_a'][0], root['Quad_int_a'][1], Bottom_cif_filename, root['Quad_int_b'][0], root['Quad_int_b'][1], work_dir = work_dir)
+            #else:
+            heterostructure, filename = transform_quadraticfield_cif.export_heterostructure(Top_cif_filename, np.array(root['Quad_int_a']), Bottom_cif_filename, np.array(root['Quad_int_b']), quad_d, workdir = work_dir)
 
             sa_prec1 = SpacegroupAnalyzer(heterostructure, symprec=0.1, angle_tolerance=10)
             heterostructure_prim = sa_prec1.find_primitive()
@@ -284,9 +275,9 @@ def main():
             print_common_supercell_transform_dict(root, target_ratio)
     elif args.output_type == 'latex':
         import print_supercell_text
-        roots = find_ratio_by_quad_pair(target_ratio, ratio_table, D, args.tol_strain, target_angle_list)
+        roots = find_ratio_by_quad_pair(target_ratio, ratio_table, quad_d, args.tol_strain, target_angle_list)
         for root in roots:
-            print(print_supercell_text.common_supercell_wood_notations(root[0:2], root[2], D))
+            print(print_supercell_text.common_supercell_wood_notations(root[0:2], root[2], quad_d))
 
 if __name__ == '__main__':
     import time
