@@ -2,9 +2,17 @@
 
 Find common supercells of given two lattices where ab planes of two lattices are similar (e.g. square-square, hexagonal-hexagonal)
 
+## Requirements
+pymatgen
+
+numpy
+
+sympy
+
+## Usage
 1. Create a pre-calculated table to find common supercells with a maximum index and the constant D determined by the symmetry (e.g. square: D = -1, hexagonal: D = -3)
 ```
-python Zquad_maketable.py --max_index max_index D
+python Zquad_maketable.py --max_index {number} D
 ```
 2. Find common supercells of two lattice cif files from the pre-calculated table
 ```
