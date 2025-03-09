@@ -18,6 +18,7 @@ python Zquad_maketable.py --max_index {number} D
 ```
 python find_common_supercell_main.py --tol_strain {float} --output_type {cif|latex} --target_angles_file {none|filename} --max_index {number} --tol_angle {float} Top_cif_filename Bottom_cif_filename 
 ```
+If you want to find the common supercells with certain rotation angles, you can designate the target_angle_file path. This text file contains the target rotation angles line by line. If you don't need to restrict rotation angles, you can omit this parameter.
 
 3. If the output_type is cif, the `heterostructure_temp` directory will be generated and the heterostructure cif files will be exported in this directory. `{top_cif_basename}_{m11}_{m12}W_{bottom_cif_basename}_{n11}_{n12}W_reduced.cif` is the final result of the finding common supercell, and the others are used for intermediate steps (I will improve the readibility of file names and directory structure). m11, m12, n11, and n12 < max_index are the transformation matrix elements for top and bottom layers.
 ```
