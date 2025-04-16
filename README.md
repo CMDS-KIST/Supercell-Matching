@@ -2,6 +2,11 @@
 
 Find common supercells of given two lattices where ab planes of two lattices are similar (e.g. square-square, hexagonal-hexagonal)
 
+## Features
+* Common supercell generation for different rotational angles
+* Common supercell generation for a given rotational angle
+* Ouput format: CIF
+  
 ## Requirements
 * Python
 * Pymatgen
