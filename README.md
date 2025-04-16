@@ -1,4 +1,4 @@
-# Supercell-Matching
+# Algorithm for Lattice Integration & GeNeration (ALIGN)
 
 Find common supercells of given two lattices where ab planes of two lattices are similar (e.g. square-square, hexagonal-hexagonal)
 
