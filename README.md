@@ -1,4 +1,4 @@
-<img src="align_logo.png">
+<img src="align_logo.png" width="500"/>
 
 # Algorithm for Lattice Integration & GeNeration (ALIGN)
 
